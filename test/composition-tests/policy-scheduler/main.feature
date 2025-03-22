@@ -22,12 +22,23 @@ Feature: Policy scheduler composition
     And input composition composition.yaml
     # following step is optional: default input functions is functions.yaml
     And input functions functions.yaml
-    Then check that no resources are provisioning
 
   @normal
-  Scenario: TODO
+  Scenario: all schedule creates a role and policy attachment
 
     # render 1
     When crossplane renders the composition
-    Then check that no resources are provisioning
-    # TODO follow the example from service-account.feature and write similar steps to test the policy scheduler composition
+    Then check that 2 resources are provisioning
+    
+    # render 2
+    Given change following observed resources with status READY
+      | resource-name  |
+      | role-app-1     |
+      | role-app-2     |
+    When crossplane renders the composition
+    Then check that 4 resources are provisioning and they are
+      | resource-name  |
+      | role-app-1     |
+      | role-app-2     |
+      | role-app-1-rpa |
+      | role-app-2-rpa |

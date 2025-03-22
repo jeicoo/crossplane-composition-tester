@@ -35,7 +35,7 @@ spec:
             name: envconfig
   - functionRef:
       name: function-go-templating
-    step: sample-step-1
+    step: roles-and-policy-binding
     input:
       apiVersion: gotemplating.fn.crossplane.io/v1beta1
       kind: GoTemplate
@@ -50,6 +50,62 @@ spec:
           {{/* HINT 1: Make use of tags to run a sub set of tests. For example: ./tests_runner.sh test -t PolicyScheduler -t normal */}}
           {{/* HINT 2: Make use of debug flag to get the observed and desired states of each crossplane iteration. Check ./dump folder. For example: ./tests_runner.sh test -d */}}
 
+          {{ $accountId:=(index .context "apiextensions.crossplane.io/environment").accountId }}
+          {{ $region:=(index .context "apiextensions.crossplane.io/environment").region }}
+          {{ $eksOID:=(index .context "apiextensions.crossplane.io/environment").eksOID }}
+          {{ $schedules:=.observed.composite.resource.spec.schedules }}
+          
+          {{ range $schedule := .observed.composite.resource.spec.schedules }}
+          ---
+          apiVersion: iam.aws.crossplane.io/v1beta1
+          kind: Role
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $schedule.roleName }}
+            name: {{ $schedule.roleName }}
+          spec:
+            forProvider:
+              description: crossplane managed resource - {{ $schedule.roleName }}
+              assumeRolePolicyDocument: |
+                {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                    {
+                      "Effect": "Allow",
+                      "Principal": {
+                        "Federated": "arn:aws:iam::{{$accountId}}:oidc-provider/oidc.eks.{{$region}}.amazonaws.com/id/{{$eksOID}}"
+                      },
+                      "Action": "sts:AssumeRoleWithWebIdentity",
+                      "Condition": {
+                        "StringLike": {
+                          "oidc.eks.{{$region}}.amazonaws.com/id/{{$eksOID}}:aud": "sts.amazonaws.com",
+                        }
+                      }
+                    }
+                  ]
+                }
+              permissionsBoundary: arn:aws:iam::{{$accountId}}:policy/sc-policy-cdk-pipeline-permission-boundary
+            providerConfigRef:
+              name: providerconfig-aws
+
+          {{/* Attach the policies after the role is READY */}}
+          {{ if and (ne $.observed.resources nil) (ne ( index $.observed.resources $schedule.roleName) nil) }}
+          {{ if eq (( index $.observed.resources $schedule.roleName) | getResourceCondition "Ready").Status "True" }}
+          ---
+          apiVersion: iam.aws.crossplane.io/v1beta1
+          kind: RolePolicyAttachment
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $schedule.roleName }}-rpa
+          spec:
+            forProvider:
+              policyArn: {{$schedule.policyArn}}
+              roleName: {{$schedule.roleName}}
+            providerConfigRef:
+              name: providerconfig-aws
+          {{ end }}
+          {{ end }}
+          {{ end }}
   - step: automatically-detect-ready-composed-resources
     functionRef:
       name: function-auto-ready
