@@ -18,15 +18,18 @@ Feature: Policy scheduler composition
 
   Background:
     Given input claim xr.yaml
-    # following step is optional: default input composition is composition.yaml 
     And input composition composition.yaml
-    # following step is optional: default input functions is functions.yaml
     And input functions functions.yaml
 
-  @normal
-  Scenario: all schedule creates a role and policy attachment
+  Scenario: all schedules creates a role and policy attachment
 
     # render 1
+    Given input claim is changed with parameters
+      | param name                      | param value          |
+      | spec.schedules[0].scheduleFrom  | 2025-03-01T00:00:00Z |
+      | spec.schedules[0].scheduleUntil | 2025-03-30T00:00:00Z |
+      | spec.schedules[1].scheduleFrom  | 2025-03-01T00:00:00Z |
+      | spec.schedules[1].scheduleUntil | 2025-04-30T00:00:00Z |
     When crossplane renders the composition
     Then check that 2 resources are provisioning
     
@@ -42,3 +45,7 @@ Feature: Policy scheduler composition
       | role-app-2     |
       | role-app-1-rpa |
       | role-app-2-rpa |
+
+  Scenario: all schedules are in the past, will not create resources
+    When crossplane renders the composition
+    Then check that no resources are provisioning

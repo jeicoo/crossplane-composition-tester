@@ -50,12 +50,15 @@ spec:
           {{/* HINT 1: Make use of tags to run a sub set of tests. For example: ./tests_runner.sh test -t PolicyScheduler -t normal */}}
           {{/* HINT 2: Make use of debug flag to get the observed and desired states of each crossplane iteration. Check ./dump folder. For example: ./tests_runner.sh test -d */}}
 
-          {{ $accountId:=(index .context "apiextensions.crossplane.io/environment").accountId }}
-          {{ $region:=(index .context "apiextensions.crossplane.io/environment").region }}
-          {{ $eksOID:=(index .context "apiextensions.crossplane.io/environment").eksOID }}
-          {{ $schedules:=.observed.composite.resource.spec.schedules }}
-          
-          {{ range $schedule := .observed.composite.resource.spec.schedules }}
+          {{ $accountId := (index .context "apiextensions.crossplane.io/environment").accountId }}
+          {{ $region := (index .context "apiextensions.crossplane.io/environment").region }}
+          {{ $eksOID := (index .context "apiextensions.crossplane.io/environment").eksOID }}
+          {{ $schedules := .observed.composite.resource.spec.schedules }}
+          {{ $currentTime := now | toString }}
+          {{ range $schedule := $schedules }}
+          {{ $startTime := $schedule.scheduleFrom }}
+          {{ $endTime := $schedule.scheduleUntil }}
+          {{ if and (ge $currentTime $startTime) (le $currentTime $endTime) }}
           ---
           apiVersion: iam.aws.crossplane.io/v1beta1
           kind: Role
@@ -103,6 +106,7 @@ spec:
               roleName: {{$schedule.roleName}}
             providerConfigRef:
               name: providerconfig-aws
+          {{ end }}
           {{ end }}
           {{ end }}
           {{ end }}
